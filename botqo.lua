@@ -16,28 +16,62 @@ function addLog(msg, text)
     table.insert(Logs[msg], text)
 end
 
+function distance(x1, y1, x2, y2)
+    return math.sqrt((x2 - x1)^2 + (y2 - y1)^2)
+end
+
 function moveRandomly()
     local randomX = math.random(0, LatestGameState.GameWidth)
     local randomY = math.random(0, LatestGameState.GameHeight)
     ao.send({ Target = Game, Action = "Move", Player = ao.id, X = randomX, Y = randomY })
 end
 
+function findNearestEnemy()
+    local nearestPlayer = nil
+    local minDistance = math.huge
+    local me = LatestGameState.Players[ao.id]
+
+    for target, state in pairs(LatestGameState.Players) do
+        if target ~= ao.id then
+            local distanceToPlayer = distance(me.x, me.y, state.x, state.y)
+            if distanceToPlayer < minDistance then
+                nearestPlayer = state
+                minDistance = distanceToPlayer
+            end
+        end
+    end
+
+    return nearestPlayer
+end
+
 function attackNearestEnemy()
     local nearestEnemy = findNearestEnemy()
+    local me = LatestGameState.Players[ao.id]
 
-    if nearestEnemy then
-        local attackEnergy = LatestGameState.Players[ao.id].energy
+    if nearestEnemy and me.energy > 0.5 then
+        local attackEnergy = me.energy * 0.5 -- Use only half of the available energy for attack
         print(colors.red .. "Attacking nearest enemy with energy: " .. attackEnergy .. colors.reset)
         ao.send({ Target = Game, Action = "PlayerAttack", Player = ao.id, AttackEnergy = tostring(attackEnergy) })
         InAction = false
+    else
+        print(colors.gray .. "Not enough energy to attack or no enemies found." .. colors.reset)
+        InAction = false
+    end
+end
+
+function evadeIfNeeded()
+    local me = LatestGameState.Players[ao.id]
+    if me.health < 0.3 then
+        moveRandomly()
+    else
+        attackNearestEnemy()
     end
 end
 
 function decideNextAction()
     if not InAction then
         InAction = true
-        moveRandomly()
-        attackNearestEnemy()
+        evadeIfNeeded()
     end
 end
 
